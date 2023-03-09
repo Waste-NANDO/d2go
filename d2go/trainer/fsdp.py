@@ -13,7 +13,9 @@ from d2go.modeling import modeling_hook as mh
 from d2go.registry.builtin import MODELING_HOOK_REGISTRY
 from d2go.trainer.helper import parse_precision_from_string
 from detectron2.utils.registry import Registry
-from torch.ao.pruning import fqn_to_module
+
+# from torch.ao.pruning import fqn_to_module
+
 from torch.cuda.amp import GradScaler
 from torch.distributed.fsdp.fully_sharded_data_parallel import (
     BackwardPrefetch,
