@@ -156,21 +156,21 @@ def get_parser():
     )
 
     parser.add_argument(
-        "--train_dataset_path",
+        "--train-dataset-path",
         action="store_true",
         default="",
         help="train dataset path",
     )
 
     parser.add_argument(
-        "--test_dataset_path",
+        "--test-dataset-path",
         action="store_true",
         default="",
         help="test dataset path",
     )
 
     parser.add_argument(
-        "--val_dataset_path",
+        "--val-dataset-path",
         action="store_true",
         default="",
         help="val dataset path",
