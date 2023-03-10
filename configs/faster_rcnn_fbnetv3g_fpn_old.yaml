@@ -35,7 +35,7 @@ MODEL:
     POOLER_RESOLUTION: 6
     NORM: "naiveSyncBN"
   ROI_MASK_HEAD:
-    NAME: "FBNetV2RoIMaskHead"
+    NAME: "MaskRCNNConvUpsampleHead"
     NUM_CONV: 4
     POOLER_RESOLUTION: 14
 MODEL_EMA:
