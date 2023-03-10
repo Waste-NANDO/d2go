@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from typing import Tuple
 import logging
 from functools import partial
 
