@@ -5,7 +5,7 @@ from d2go.quantization import learnable_qat
 from mobile_cv.common.misc.registry import Registry
 
 TORCH_VERSION: Tuple[int, ...] = tuple(int(x) for x in torch.__version__.split(".")[:2])
-if TORCH_VERSION > (1, 10):
+if TORCH_VERSION > (1, 8):
     from torch.ao.quantization.quantize_fx import convert_fx, prepare_fx, prepare_qat_fx
 else:
     from torch.quantization.quantize_fx import convert_fx, prepare_fx, prepare_qat_fx

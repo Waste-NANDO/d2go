@@ -6,7 +6,7 @@ from functools import partial
 import torch
 import torch.distributed as dist
 TORCH_VERSION: Tuple[int, ...] = tuple(int(x) for x in torch.__version__.split(".")[:2])
-if TORCH_VERSION > (1, 10):
+if TORCH_VERSION > (1, 8):
     from torch.ao.quantization._learnable_fake_quantize import _LearnableFakeQuantize
 else:
     from torch.quantization._learnable_fake_quantize import _LearnableFakeQuantize
