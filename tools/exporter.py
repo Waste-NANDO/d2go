@@ -101,6 +101,7 @@ def main(
 
 
 def run_with_cmdline_args(args):
+    print("ARGS!")
     print(str(args))
     cfg, output_dir, train_dt, test_dt, val_dt, runner_name = prepare_for_launch(args)
     shared_context = setup_before_launch(cfg, output_dir, runner_name)
@@ -158,21 +159,18 @@ def get_parser():
 
     parser.add_argument(
         "--train-dataset-path",
-        action="store_true",
         default="",
         help="train dataset path",
     )
 
     parser.add_argument(
         "--test-dataset-path",
-        action="store_true",
         default="",
         help="test dataset path",
     )
 
     parser.add_argument(
         "--val-dataset-path",
-        action="store_true",
         default="",
         help="val dataset path",
     )
@@ -181,6 +179,8 @@ def get_parser():
 
 def cli(args=None):
     args = sys.argv[1:] if args is None else args
+    print("initial args")
+    print(args)
     run_with_cmdline_args(get_parser().parse_args(args))
 
 
