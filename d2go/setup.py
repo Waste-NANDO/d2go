@@ -188,7 +188,7 @@ def create_cfg_from_cli(
 
 def prepare_for_launch(
     args,
-) -> Tuple[CfgNode, str, Optional[str]]:
+) -> Tuple[CfgNode, str, Optional[str], Optional[str], Optional[str], Optional[str]]:
     """
     Load config, figure out working directory, create runner.
         - when args.config_file is empty, returned cfg will be the default one
