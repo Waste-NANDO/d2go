@@ -4,8 +4,10 @@ from functools import partial
 
 import torch
 import torch.distributed as dist
-from torch.ao.quantization._learnable_fake_quantize import _LearnableFakeQuantize
-
+if TORCH_VERSION > (1, 10):
+    from torch.ao.quantization._learnable_fake_quantize import _LearnableFakeQuantize
+else:
+    from torch.quantization._learnable_fake_quantize import _LearnableFakeQuantize
 
 logger = logging.getLogger(__name__)
 
