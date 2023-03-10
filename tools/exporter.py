@@ -101,7 +101,7 @@ def main(
 
 
 def run_with_cmdline_args(args):
-    cfg, output_dir, runner_name, train_dt, test_dt, val_dt = prepare_for_launch(args)
+    cfg, output_dir, train_dt, test_dt, val_dt, runner_name = prepare_for_launch(args)
     shared_context = setup_before_launch(cfg, output_dir, runner_name)
     if shared_context is not None:
         set_shared_context(shared_context)

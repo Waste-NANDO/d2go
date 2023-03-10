@@ -188,7 +188,7 @@ def create_cfg_from_cli(
 
 def prepare_for_launch(
     args,
-) -> Tuple[CfgNode, str, Optional[str], Optional[str], Optional[str], Optional[str]]:
+) -> Tuple[CfgNode, str, str, str, str, Optional[str]]:
     """
     Load config, figure out working directory, create runner.
         - when args.config_file is empty, returned cfg will be the default one
@@ -211,7 +211,7 @@ def prepare_for_launch(
     assert args.output_dir or args.config_file
     output_dir = args.output_dir or cfg.OUTPUT_DIR
 
-    return cfg, output_dir, args.runner, train_dt, test_dt, val_dt
+    return cfg, output_dir, train_dt, test_dt, val_dt, args.runner
 
 
 def maybe_override_output_dir(cfg: CfgNode, output_dir: str):
