@@ -26,6 +26,9 @@ from d2go.setup import (
     setup_root_logger,
 )
 
+from detectron2.data.datasets import register_coco_instances
+from detectron2.data import MetadataCatalog, DatasetCatalog
+
 
 logger = logging.getLogger("d2go.tools.export")
 
@@ -45,6 +48,7 @@ def main(
     device: str = "cpu",
     compare_accuracy: bool = False,
     skip_if_fail: bool = False,
+
 ) -> ExporterOutput:
     if compare_accuracy:
         raise NotImplementedError(
@@ -97,10 +101,21 @@ def main(
 
 
 def run_with_cmdline_args(args):
-    cfg, output_dir, runner_name = prepare_for_launch(args)
+    cfg, output_dir, runner_name, train_dt, test_dt, val_dt = prepare_for_launch(args)
     shared_context = setup_before_launch(cfg, output_dir, runner_name)
     if shared_context is not None:
         set_shared_context(shared_context)
+
+    if train_dt != "" and test_dt != "" and val_dt != "":
+        register_coco_instances("objects_dataset_train", {},
+                                train_dt,
+                                "/content/dataset/")
+        register_coco_instances("objects_dataset_val", {},
+                                train_dt,
+                                "/content/dataset/")
+        register_coco_instances("objects_dataset_test", {},
+                                train_dt,
+                                "/content/dataset/")
 
     main_func = main if args.disable_post_mortem else post_mortem_if_fail_for_main(main)
     return main_func(
@@ -138,6 +153,27 @@ def get_parser():
         default=False,
         help="If set, suppress the exception for failed exporting and continue to"
         " export the next type of model",
+    )
+
+    parser.add_argument(
+        "--train_dataset_path",
+        action="store_true",
+        default="",
+        help="train dataset path",
+    )
+
+    parser.add_argument(
+        "--test_dataset_path",
+        action="store_true",
+        default="",
+        help="test dataset path",
+    )
+
+    parser.add_argument(
+        "--val_dataset_path",
+        action="store_true",
+        default="",
+        help="val dataset path",
     )
     return parser
 

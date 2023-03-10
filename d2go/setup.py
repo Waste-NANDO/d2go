@@ -203,11 +203,15 @@ def prepare_for_launch(
         runner_class=args.runner,
     )
 
+    train_dt = args.train_dataset_path
+    test_dt = args.test_dataset_path
+    val_dt = args.val_dataset_path
+
     # overwrite the output_dir based on config if output is not set via cli
     assert args.output_dir or args.config_file
     output_dir = args.output_dir or cfg.OUTPUT_DIR
 
-    return cfg, output_dir, args.runner
+    return cfg, output_dir, args.runner, train_dt, test_dt, val_dt
 
 
 def maybe_override_output_dir(cfg: CfgNode, output_dir: str):
