@@ -1,18 +1,22 @@
 # (c) Meta Platforms, Inc. and affiliates. Confidential and proprietary.
+import json
 import os
 from typing import Callable, cast, IO
 
 import detectron2.utils.comm as comm
 import torch
-from d2go.modeling.ema import EMAState
+from d2go.checkpoint.utils import (
+    gather_ema_state_dict,
+    gather_optimizer_state_dict,
+    scatter_ema_state_dict,
+    scatter_optimizer_state_dict,
+)
 from d2go.quantization.modeling import QATCheckpointer
 from d2go.trainer.fsdp import FSDPWrapper
 
 from mobile_cv.torch.utils_pytorch.distributed_helper import interleave_by_rank
 
-from torch.distributed.fsdp.fully_sharded_data_parallel import (
-    FullyShardedDataParallel as FSDP,
-)
+from torch.distributed.fsdp.fully_sharded_data_parallel import StateDictType
 
 
 def get_max_checkpoint_concurrency() -> int:
@@ -47,25 +51,33 @@ class FSDPCheckpointer(QATCheckpointer):
         if isinstance(self.model, FSDPWrapper):
             load_path = path
             if path:
-                # loading path is a directory: sharded local state dict is used
+                # loading path is a directory: local or sharded state dict is used
                 if self.path_manager.isdir(path):
-                    self.logger.info(
-                        "[FSDPCheckpointer] Loading from local checkpoint ..."
+                    # Get state dict type from metadata file
+                    metadata = self._load_metadata(path)
+                    state_dict_type = (
+                        metadata["state_dict_type"] if metadata else "LOCAL_STATE_DICT"
                     )
-                    self.model.load_local_state_dict = True
+
+                    assert state_dict_type in ["LOCAL_STATE_DICT", "SHARDED_STATE_DICT"]
+                    type_str = "local" if "LOCAL_STATE_DICT" else "sharded"
+                    self.logger.info(
+                        f"[FSDPCheckpointer] Loading from {type_str} checkpoint ..."
+                    )
+                    self.model.load_state_dict_type = StateDictType[state_dict_type]
                     load_path = os.path.join(path, f"rank{comm.get_rank()}.pth")
                 # loading path is a file: full global state dict is used
                 else:
                     self.logger.info(
-                        "[FSDPCheckpointer] Loading from global checkpoint ..."
+                        "[FSDPCheckpointer] Loading from full checkpoint ..."
                     )
-                    self.model.load_local_state_dict = False
+                    self.model.load_state_dict_type = StateDictType.FULL_STATE_DICT
 
             # Convert local ckpt to global ckpt when we load from a local ckpt but want to save to global ckpt
             convert_local_ckpt_to_global = (
                 path
-                and self.model.load_local_state_dict
-                and not self.model.use_local_state_dict
+                and self.model.load_state_dict_type == StateDictType.LOCAL_STATE_DICT
+                and self.model.state_dict_type == StateDictType.FULL_STATE_DICT
             )
 
             # Load all checkpointables from local ckpt if we want to convert to global ckpt
@@ -96,7 +108,6 @@ class FSDPCheckpointer(QATCheckpointer):
                 )
                 ema_state = checkpoint.pop("ema_state")
                 scatter_ema_state_dict(ema_state, self.model)
-
             # Convert local ckpt by resaving the current state
             if convert_local_ckpt_to_global:
                 self.logger.info(
@@ -123,7 +134,6 @@ class FSDPCheckpointer(QATCheckpointer):
             if comm.is_main_process():
                 return super().save(name, **kwargs)
             return
-
         data = {}
         # FSDP: model.state_dict() needs to be called by all ranks before saving
         data["model"] = self.model.state_dict()
@@ -137,7 +147,7 @@ class FSDPCheckpointer(QATCheckpointer):
         data.update(kwargs)
 
         # If using full state dict, only the main process does checkpoint saving; Otherwise, all processes do
-        if self.model.use_local_state_dict:
+        if self.model.state_dict_type != StateDictType.FULL_STATE_DICT:
             # Main process creates directory for local saves
             new_save_dir = os.path.join(self.save_dir, name)
             if comm.is_main_process():
@@ -155,8 +165,10 @@ class FSDPCheckpointer(QATCheckpointer):
                 self._save_file(data, save_file)
             # Main process tags last checkpoint if no errors in all processes
             comm.synchronize()
-            if comm.is_main_process() and tag_last_ckpt:
-                self.tag_last_checkpoint(name)
+            if comm.is_main_process():
+                self._save_metadata(new_save_dir)
+                if tag_last_ckpt:
+                    self.tag_last_checkpoint(name)
         elif comm.is_main_process():
             basename = "{}.pth".format(name)
             save_file = os.path.join(self.save_dir, basename)
@@ -175,70 +187,16 @@ class FSDPCheckpointer(QATCheckpointer):
         with interleave_by_rank(concurrency_limit=self._concurrency_limit_fetcher()):
             return super()._load_file(f)
 
+    def _save_metadata(self, path):
+        metadata_file = os.path.join(path, "metadata.json")
+        obj = {"state_dict_type": self.model.state_dict_type.name}
+        with self.path_manager.open(metadata_file, "w") as f:
+            json.dump(obj, f)
 
-def gather_optimizer_state_dict(optimizer, model: FSDPWrapper):
-    """
-    Get full/local optimizer state dict from an FSDP model.
-    """
-    # FSDP: full_optim_state_dict() needs to be called by all ranks
-    if not model.use_local_state_dict:
-        return FSDP.full_optim_state_dict(model, optimizer, rank0_only=model.rank0_only)
-    return optimizer.state_dict()
-
-
-def scatter_optimizer_state_dict(optimizer, optim_state_dict, model: FSDPWrapper):
-    """
-    Load a full/local optimizer state dict to a FSDP model.
-    If using full state dict, shard and scatter the optimizer state dict before loading
-    """
-    if not model.load_local_state_dict:
-        optim_state_dict = FSDP.shard_full_optim_state_dict(optim_state_dict, model)
-    optimizer.load_state_dict(optim_state_dict)
-
-
-def gather_ema_state_dict(ema_state, model: FSDPWrapper):
-    """
-    Get full/local EMA state dict from an FSDP model.
-    If using full state dict, gather local sharded EMA states from all FSDP processes and aggregate them into a full EMA state dict
-    """
-    if not model.use_local_state_dict:
-        # Apply local ema states to the model and unshard them
-        with ema_state.apply_and_restore(model):
-            with FSDP.summon_full_params(
-                model,
-                writeback=False,
-                offload_to_cpu=model.offload_to_cpu,
-                rank0_only=model.rank0_only,
-            ):
-                state = EMAState.FromModel(model)
-            return state.state
-    return ema_state.state_dict()
-
-
-def scatter_ema_state_dict(ema_state_dict, model: FSDPWrapper):
-    """
-    Load a full/local EMA state dict to a FSDP model.
-    If loading full state dict, ema_state_dict needs to be properly sharded for each FSDP process to store locally
-    """
-    if not model.load_local_state_dict:
-        # Store the current model state.
-        old_local_state = EMAState.FromModel(model)
-
-        # Apply ema_state as a FULL state dict to the model so it can be properly sharded
-        # Currently only [offload_to_cpu=False, rank0_only=False] is supported
-        with FSDP.summon_full_params(
-            model,
-            writeback=True,
-            offload_to_cpu=False,
-            rank0_only=False,
-        ):
-            ema_state = EMAState()
-            ema_state.load_state_dict(ema_state_dict)
-            ema_state.apply_to(model)
-
-        # Load ema_state from model
-        model.ema_state.save_from(model)
-        # Restore the old model state
-        old_local_state.apply_to(model)
-    else:
-        model.ema_state.load_state_dict(ema_state_dict)
+    def _load_metadata(self, path):
+        metadata_file = os.path.join(path, "metadata.json")
+        if self.path_manager.exists(metadata_file):
+            with self.path_manager.open(metadata_file, "r") as f:
+                return json.load(f)
+        else:
+            return None

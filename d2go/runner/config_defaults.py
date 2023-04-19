@@ -72,6 +72,8 @@ def _add_detectron2go_runner_default_cfg(_C: CN) -> None:
     _C.MODEL.DDP_FIND_UNUSED_PARAMETERS = False
     # Set FP16 gradient compression for DistributedDataParallel.
     _C.MODEL.DDP_FP16_GRAD_COMPRESS = False
+    # Specify the gradients as views
+    _C.MODEL.DDP_GRADIENT_AS_BUCKET_VIEW = False
 
     # Set default optimizer
     _C.SOLVER.OPTIMIZER = "sgd"
@@ -81,6 +83,8 @@ def _add_detectron2go_runner_default_cfg(_C: CN) -> None:
     assert not _C.SOLVER.AMP.ENABLED
     # AMP precision is used by both D2 and lightning backend. Can be "float16" or "bfloat16".
     _C.SOLVER.AMP.PRECISION = "float16"
+    # log the grad scalar to the output
+    _C.SOLVER.AMP.LOG_GRAD_SCALER = False
 
     # Betas are used in the AdamW optimizer
     _C.SOLVER.BETAS = (0.9, 0.999)
@@ -115,6 +119,9 @@ def _add_detectron2go_runner_default_cfg(_C: CN) -> None:
 
     # Specify whether to perform NUMA binding
     _C.NUMA_BINDING = False
+
+    # Specify whether to zero the gradients before forward
+    _C.ZERO_GRAD_BEFORE_FORWARD = False
 
 
 def _add_rcnn_default_config(_C: CN) -> None:

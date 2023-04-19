@@ -38,6 +38,9 @@ from torch.distributed.elastic.multiprocessing.errors import (
 )
 
 logger = logging.getLogger("d2go.tools.train_net")
+# Make sure logging is set up centrally even for e.g. dataloading workers which
+# have entry points outside of D2Go.
+setup_root_logger()
 
 
 def main(
@@ -47,7 +50,6 @@ def main(
     eval_only: bool = False,
     resume: bool = True,  # NOTE: always enable resume when running on cluster
 ) -> Union[TrainNetOutput, TestNetOutput]:
-
     logger.info("Starting main")
     error_handler = get_error_handler()
     logger.debug(f">>>>>>> Error handler is: {type(error_handler)=}, {error_handler=}")
@@ -91,6 +93,7 @@ def main(
                 else [comm.get_local_rank()],
                 broadcast_buffers=False,
                 find_unused_parameters=cfg.MODEL.DDP_FIND_UNUSED_PARAMETERS,
+                gradient_as_bucket_view=cfg.MODEL.DDP_GRADIENT_AS_BUCKET_VIEW,
             )
 
         logger.info("Starting train..")
@@ -190,7 +193,6 @@ def build_cli_args(
 
 
 if __name__ == "__main__":
-    setup_root_logger()
     logger.info("Starting CLI application")
     try:
         cli()
